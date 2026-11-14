@@ -1,0 +1,21 @@
+{
+  "port": 4810,
+  "acces_reseau": false,
+  "code_acces": "",
+  "nowis_file_url": "https://qubicfmddcaqbotsinss.supabase.co",
+  "nowis_cle": "",
+  "crm_url": "https://qubicfmddcaqbotsinss.supabase.co",
+  "crm_cle": "",
+  "crm_minutes": 10,
+  "crm_autres": [
+    {
+      "id": "stlucien",
+      "nom": "Saint-Lucien",
+      "url": "https://pgwzyndjzkbupxxjzaep.supabase.co",
+      "cle": ""
+    }
+  ],
+  "courriel_cle": "",
+  "courriel_expediteur": "Création Nowis <factures@nowis.store>",
+  "courriel_repondre_a": "simonmorin@nowis.store"
+}

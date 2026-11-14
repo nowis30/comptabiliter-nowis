@@ -1,0 +1,8 @@
+# Vos données et vos clés ne vont jamais dans GitHub.
+config.json
+donnees/
+donnees-initiales.json
+*.zip
+*.tmp
+node_modules/
+__pycache__/

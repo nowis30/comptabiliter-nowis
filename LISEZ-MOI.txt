@@ -1,0 +1,143 @@
+﻿COMPTABILITE NOWIS - SERVEUR LOCAL
+==================================
+
+Ce dossier contient le logiciel et un petit serveur qui tourne sur votre ordinateur.
+Vos donnees restent sur votre disque, dans le dossier "donnees".
+
+
+1. CE QU'IL FAUT
+- Node.js version 18 ou plus recente (https://nodejs.org, version LTS).
+  Pour verifier : ouvrez l'invite de commandes et tapez  node --version
+- Git (https://git-scm.com/download/win) pour installer et mettre a jour depuis GitHub.
+  Sans Git, vous pouvez aussi telecharger le ZIP du depot sur GitHub (bouton Code > Download ZIP).
+
+
+2. INSTALLATION
+Si vous avez deja le dossier "ComptabiliteNowis-Serveur" (avec vos donnees) : arretez le
+serveur, faites la nouvelle installation ci-dessous, puis copiez le dossier "donnees" et
+le fichier config.json de l'ancien dossier dans le nouveau. Refaites ensuite le raccourci.
+
+Nouvelle installation :
+1. Dans l'invite de commandes, dans Documents :
+       git clone https://github.com/nowis30/comptabiliter-nowis.git
+   Ne l'installez pas dans Telechargements, ni dans un dossier synchronise en continu
+   (OneDrive) : sauvegardez plutot vers OneDrive.
+   Au premier demarrage, config.json est cree a partir de config.exemple.json :
+   inscrivez-y vos cles (section 5). Vos cles ne sont jamais envoyees dans GitHub.
+2. Double-cliquez "Installer-le-raccourci.bat" : un raccourci "Comptabilite Nowis"
+   apparait sur le bureau.
+3. Ouvrez le raccourci. Une petite fenetre noire demarre le serveur (reduite dans la barre
+   des taches) et le logiciel s'ouvre dans votre navigateur a l'adresse
+       http://localhost:4810
+4. Laissez la fenetre noire ouverte pendant que vous travaillez. La fermer arrete le serveur.
+
+Si Windows affiche "Windows a protege votre ordinateur", cliquez
+"Informations complementaires" puis "Executer quand meme".
+Si le pare-feu Windows pose une question, choisissez "Reseaux prives" seulement.
+
+Optionnel : "Demarrer-avec-Windows.bat" lance le serveur a chaque ouverture de session.
+
+Mise a jour : "Mettre-a-jour.cmd" telecharge la derniere version depuis GitHub.
+Arretez puis relancez le serveur ensuite. config.json et donnees ne sont jamais touches.
+
+
+3. VOS DONNEES
+- donnees\compta.json        : toutes vos ecritures, reglages, contacts, etc.
+- donnees\fichiers\          : photos et PDF joints aux ecritures.
+- donnees\sauvegardes\       : une copie automatique par jour (les 60 dernieres).
+Une nouvelle installation depuis GitHub demarre vide : la synchronisation y ramene les
+donnees du CRM et de Saint-Lucien. Pour retrouver aussi vos saisies (ancien CRM, depenses,
+etc.), restaurez une sauvegarde (voir ci-dessous). Vos donnees ne sont jamais dans GitHub.
+
+Pour une copie hors de l'ordinateur : copiez tout le dossier "donnees" sur une cle USB
+ou dans OneDrive, de temps en temps, quand le serveur est arrete.
+
+Pour reprendre des donnees de la version hors ligne (fichier HTML) : dans la version
+hors ligne, cliquez "Telecharger une sauvegarde", puis ici "Restaurer une sauvegarde".
+Attention : la restauration remplace toutes les donnees du serveur (une copie de
+l'etat precedent est gardee dans donnees\sauvegardes).
+
+Les photos jointes dans la version en ligne ne sont pas copiees ici.
+
+
+4. UTILISER LE CELLULAIRE (facultatif)
+Pour ouvrir le logiciel depuis votre cellulaire sur le meme Wi-Fi :
+1. Ouvrez config.json avec le Bloc-notes.
+2. Mettez  "acces_reseau": true  et choisissez un code :  "code_acces": "un-code-a-vous"
+   (au moins 6 caracteres; evitez un code facile a deviner).
+3. Redemarrez le serveur. La fenetre noire et le haut de la page affichent l'adresse
+   a taper sur le cellulaire, par exemple http://192.168.1.25:4810
+4. Sur le cellulaire, entrez le code une fois.
+La connexion n'est pas chiffree (http) : n'activez cet acces que sur votre reseau a la
+maison, jamais sur un Wi-Fi public.
+
+
+5. AGENT NOWIS ET CRM NOWIS.STORE (deja branches)
+config.json contient deux cles propres a ce logiciel :
+- "nowis_cle" : envoie les photos, PDF et demandes de l'onglet Assistant a votre agent
+  NoWIS. L'ordinateur ou tourne l'agent doit etre allume, avec le travailleur demarre.
+  Une demande prend environ 20 a 60 secondes.
+- "crm_cle" : lit (sans jamais rien modifier) les factures, paiements, loyers et clients
+  du CRM nowis.store, au demarrage puis toutes les 10 minutes ("crm_minutes").
+- "crm_autres" : les autres sources lues de la meme facon. Saint-Lucien y est deja,
+  avec sa propre cle (factures, paiements et loyers de l'immeuble, votre part de 33 %).
+  Le bouton "Synchroniser maintenant" en haut de la page force une mise a jour.
+
+Comment la synchronisation traite vos corrections :
+- Une facture, un paiement ou un loyer nouveau dans le CRM apparait ici automatiquement.
+- Si le CRM change une ecriture que vous n'avez pas touchee ici, elle est mise a jour.
+- Si vous l'avez corrigee ici, votre correction est gardee et l'ecriture va dans
+  "A verifier" avec ce que dit le CRM. Vos notes, categories et pieces jointes restent.
+- Une ecriture qui disparait du CRM n'est jamais effacee ici : elle va dans "A verifier".
+- Pour exclure une ecriture du CRM de vos chiffres, mettez son etat a "Ecartee"
+  plutot que de la supprimer (une ecriture supprimee reviendrait a la synchronisation).
+- Les depenses saisies seulement ici (photos, import bancaire) ne sont pas envoyees au CRM.
+
+Les deux cles restent dans config.json sur votre ordinateur : ne partagez pas ce fichier.
+Si une cle est perdue ou volee, demandez qu'on la desactive : un nouvel essai avec
+cette cle sera alors refuse.
+
+
+6. VERROUILLAGE, CLOTURE ET HISTORIQUE
+- Reglages > Verrouillage et cloture : une fois une periode declaree, verrouillez-la.
+  Ses ecritures ne peuvent plus etre modifiees ni supprimees (un paiement recu apres la
+  date reste possible). Deverrouiller demande de taper DEVERROUILLER.
+- "Cloturer l'exercice" verrouille l'annee et garde une copie figee de toutes vos donnees
+  dans donnees\clotures (possible a partir du 1er janvier de l'annee suivante).
+- Onglet Historique : chaque creation, modification et suppression est notee dans
+  donnees\historique.jsonl (date, appareil, valeurs avant et apres). Ce fichier ne fait
+  que s'allonger : gardez-le avec vos sauvegardes.
+
+
+7. RAPPROCHEMENT BANCAIRE
+Onglet Rapprochement : inscrivez la date et le solde de fin de votre releve, cochez les
+mouvements qui y figurent; quand l'ecart est de 0 $, terminez. Chaque mouvement n'est
+rapproche qu'une fois. Les paiements comptant sont caches par defaut.
+
+
+8. COURRIELS AUTOMATIQUES (factures recurrentes et rappels)
+Le serveur envoie les courriels par le service Resend, deja utilise par le site nowis.store.
+1. Dans Resend (resend.com), creez une cle API avec l'acces "Sending access" seulement,
+   pour le domaine nowis.store (deja verifie si le site envoie deja des courriels).
+2. Collez-la dans config.json :  "courriel_cle": "re_..."
+   Verifiez "courriel_expediteur" (adresse du domaine verifie) et "courriel_repondre_a".
+3. Redemarrez le serveur, puis Reglages > Courriels automatiques :
+   - "Envoyer un courriel d'essai" pour verifier;
+   - cochez "Envoyer automatiquement les rappels de paiement" et ajustez les delais;
+   - "Voir les envois prevus" montre ce qui partirait, avant que rien ne parte.
+4. Pour une facture recurrente envoyee automatiquement : dans le modele, cochez
+   "Emettre et envoyer automatiquement". Le serveur la numerote (CN-2026-001...).
+   Ne le faites pas pour des factures deja emises dans le CRM (le client les recevrait
+   en double). Pour une facture precise, cochez "Ne pas envoyer de rappel automatique".
+Les envois se font entre 8 h et 20 h, quand le serveur est en marche. Chaque envoi est
+note dans l'historique et dans la facture.
+
+
+9. PROBLEMES FREQUENTS
+- "Le port 4810 est deja utilise" : changez "port" dans config.json (ex. 4811).
+- La page indique que le serveur ne repond plus : la fenetre noire a ete fermee.
+  Relancez le raccourci.
+- "Le fichier de donnees est endommage" : copiez la plus recente sauvegarde de
+  donnees\sauvegardes a la place de donnees\compta.json.
+
+Ce logiciel ne transmet rien au gouvernement et ne modifie ni le site NOWIS ni le CRM.
