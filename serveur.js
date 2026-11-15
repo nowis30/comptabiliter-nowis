@@ -41,7 +41,7 @@ function lireConfig() {
     fs.copyFileSync(exemple, fichier);
     console.log('config.json créé à partir de config.exemple.json : inscrivez-y vos clés (voir LISEZ-MOI).');
   }
-  try { c = JSON.parse(fs.readFileSync(fichier, 'utf8')); }
+  try { c = JSON.parse(fs.readFileSync(fichier, 'utf8').replace(/^\uFEFF/, '')); }
   catch (e) {
     if (e.code !== 'ENOENT') { console.error(`Le fichier config.json est illisible : ${e.message}`); process.exit(1); }
   }
@@ -120,7 +120,7 @@ function charger() {
   fs.mkdirSync(SAUVEGARDES, { recursive: true });
   fs.mkdirSync(CLOTURES, { recursive: true });
   if (fs.existsSync(BASE)) {
-    try { D = normaliser(JSON.parse(fs.readFileSync(BASE, 'utf8'))); }
+    try { D = normaliser(JSON.parse(fs.readFileSync(BASE, 'utf8').replace(/^\uFEFF/, ''))); }
     catch (e) {
       console.error(`\nLe fichier de données est endommagé : ${BASE}\n${e.message}\n`);
       console.error(`Pour le réparer, copiez la sauvegarde la plus récente du dossier\n  ${SAUVEGARDES}\nà la place de compta.json, puis relancez.`);
@@ -131,7 +131,7 @@ function charger() {
   const initiales = path.join(RACINE, 'donnees-initiales.json');
   let source = {};
   if (fs.existsSync(initiales)) {
-    try { source = JSON.parse(fs.readFileSync(initiales, 'utf8')); }
+    try { source = JSON.parse(fs.readFileSync(initiales, 'utf8').replace(/^\uFEFF/, '')); }
     catch (e) { console.error(`donnees-initiales.json est illisible (${e.message}) : démarrage avec un logiciel vide.`); }
   }
   D = normaliser(source);
