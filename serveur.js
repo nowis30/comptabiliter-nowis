@@ -13,7 +13,7 @@ const crypto = require('node:crypto');
 const os = require('node:os');
 const { execFile } = require('node:child_process');
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 const RACINE = __dirname;
 const PUBLIC = path.join(RACINE, 'public');
 const DONNEES = path.join(RACINE, 'donnees');
@@ -60,6 +60,7 @@ function lireConfig() {
     courrielExpediteur: String(c.courriel_expediteur || '').trim(),
     courrielApi: String(c.courriel_api || 'https://api.resend.com').trim(),
     courrielRepondreA: String(c.courriel_repondre_a || '').trim(),
+    copieExterne: c.copie_externe === undefined ? 'auto' : String(c.copie_externe || '').trim(),
   };
   if (cfg.reseau && cfg.code.length < 6) {
     console.error('Accès réseau demandé sans code d\'accès suffisant : inscrivez un "code_acces" d\'au moins 6 caractères dans config.json.');
@@ -150,6 +151,45 @@ function sauvegardeDuJour() {
     const liste = fs.readdirSync(SAUVEGARDES).filter(x => /^compta-\d{4}-\d{2}-\d{2}\.json$/.test(x)).sort();
     for (const x of liste.slice(0, -GARDER_SAUVEGARDES)) fs.unlinkSync(path.join(SAUVEGARDES, x));
   } catch (e) { console.error(`Sauvegarde quotidienne impossible : ${e.message}`); }
+  copieExterne();
+}
+
+/* ---------- Copie hors de l'ordinateur (OneDrive, Google Drive) ---------- */
+// Le serveur dépose ses copies dans un dossier synchronisé par OneDrive ou Google Drive pour ordinateur;
+// c'est leur application qui les envoie dans le nuage. "auto" = OneDrive de Windows s'il est installé.
+const etatCopie = { dossier: '', derniere: '', erreur: '' };
+/** Le dossier de copie, et la racine qui doit déjà exister (le dossier OneDrive, ou le parent choisi). */
+function dossierCopie() {
+  const v = cfg.copieExterne;
+  if (!v || v === 'non') return { dossier: '', racine: '' };
+  if (v === 'auto') {
+    const od = process.env.OneDrive || process.env.OneDriveConsumer || process.env.OneDriveCommercial || '';
+    return od ? { dossier: path.join(od, 'Comptabilite Nowis', 'sauvegardes'), racine: od } : { dossier: '', racine: '' };
+  }
+  const d = path.resolve(v);
+  return { dossier: d, racine: path.dirname(d) };
+}
+function copieExterne() {
+  const { dossier, racine } = dossierCopie();
+  etatCopie.dossier = dossier;
+  if (!dossier) { etatCopie.erreur = ''; return; }
+  try {
+    if (!fs.existsSync(racine)) throw new Error(`le dossier ${racine} n'existe pas (OneDrive ou Google Drive est-il installé?)`);
+    fs.mkdirSync(path.join(dossier, 'fichiers'), { recursive: true });
+    // Copie du jour (remplacée à chaque passage par l'état le plus récent), historique et pièces jointes.
+    ecrireAtomique(path.join(dossier, `compta-${dateLocale()}.json`), JSON.stringify({ app: 'compta-nowis', enregistre: new Date().toISOString(), ...D }));
+    if (fs.existsSync(HISTORIQUE)) fs.copyFileSync(HISTORIQUE, path.join(dossier, 'historique.jsonl'));
+    for (const f of fs.readdirSync(FICHIERS)) {
+      const cible = path.join(dossier, 'fichiers', f);
+      if (!fs.existsSync(cible)) fs.copyFileSync(path.join(FICHIERS, f), cible);
+    }
+    const liste = fs.readdirSync(dossier).filter(x => /^compta-\d{4}-\d{2}-\d{2}\.json$/.test(x)).sort();
+    for (const x of liste.slice(0, -GARDER_SAUVEGARDES)) fs.unlinkSync(path.join(dossier, x));
+    Object.assign(etatCopie, { derniere: new Date().toISOString(), erreur: '' });
+  } catch (e) {
+    etatCopie.erreur = e.message;
+    console.error(`Copie hors de l'ordinateur impossible : ${e.message}`);
+  }
 }
 
 /** Applique un changement, l'écrit sur disque, et l'annule en mémoire si l'écriture échoue. */
@@ -736,7 +776,7 @@ async function traiter(req, res) {
 
   if (req.method === 'GET' && p === '/api/etat') {
     return repondre(res, 200, { version: VERSION, ia: iaConfiguree(), sync: etatSync, dossier: DONNEES, reseau: cfg.reseau,
-      courriel: { configure: courrielConfigure(), expediteur: courrielConfigure() ? cfg.courrielExpediteur : '' },
+      courriel: { configure: courrielConfigure(), expediteur: courrielConfigure() ? cfg.courrielExpediteur : '' }, copie: etatCopie,
       adresses: cfg.reseau ? adressesReseau().map(a => `http://${a}:${cfg.port}`) : [] });
   }
   if (req.method === 'GET' && p === '/api/donnees') return repondre(res, 200, D);
@@ -874,6 +914,10 @@ function ouvrirNavigateur(url) {
 charger();
 sauvegardeDuJour();
 setInterval(sauvegardeDuJour, 3 * 3600 * 1000).unref();
+process.on('SIGINT', () => { copieExterne(); process.exit(0); });
+process.on('SIGTERM', () => { copieExterne(); process.exit(0); });
+// Windows : fermer la fenêtre du serveur envoie SIGHUP; on en profite pour faire une dernière copie.
+process.on('SIGHUP', () => { copieExterne(); process.exit(0); });
 
 const serveur = http.createServer((req, res) => {
   traiter(req, res).catch(e => {
@@ -908,6 +952,7 @@ serveur.listen(cfg.port, cfg.reseau ? '0.0.0.0' : '127.0.0.1', () => {
     for (const a of adressesReseau()) console.log(`  http://${a}:${cfg.port}`);
   }
   console.log(iaConfiguree() ? 'Agent NoWIS : branché.' : 'Agent NoWIS : non branché (voir LISEZ-MOI).');
+  console.log(etatCopie.dossier ? (etatCopie.erreur ? `Copie hors de l'ordinateur : ÉCHEC (${etatCopie.erreur}).` : `Copie hors de l'ordinateur : ${etatCopie.dossier} (toutes les 3 heures).`) : 'Copie hors de l\'ordinateur : non configurée (voir LISEZ-MOI).');
   console.log(courrielConfigure() ? `Courriels : envoi activé (${cfg.courrielExpediteur}).` : 'Courriels : envoi non configuré.');
   if (courrielConfigure()) {
     const tour = () => { const h = new Date().getHours(); if (h >= 8 && h < 20) faireEnvois('Envoi automatique').catch(e => console.error(`Envois automatiques : ${e.message}`)); };

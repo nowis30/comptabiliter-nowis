@@ -49,8 +49,22 @@ Une nouvelle installation depuis GitHub demarre vide : la synchronisation y rame
 donnees du CRM et de Saint-Lucien. Pour retrouver aussi vos saisies (ancien CRM, depenses,
 etc.), restaurez une sauvegarde (voir ci-dessous). Vos donnees ne sont jamais dans GitHub.
 
-Pour une copie hors de l'ordinateur : copiez tout le dossier "donnees" sur une cle USB
-ou dans OneDrive, de temps en temps, quand le serveur est arrete.
+COPIE HORS DE L'ORDINATEUR (automatique)
+Le serveur copie vos donnees dans un dossier synchronise par OneDrive ou Google Drive
+pour ordinateur; c'est leur application qui les envoie dans le nuage. La copie se fait au
+demarrage, toutes les 3 heures et a l'arret du serveur : la copie du jour, l'historique
+et les photos et PDF joints. Les 60 derniers jours sont gardes.
+- "copie_externe": "auto"  (par defaut) : dossier OneDrive de Windows,
+      ...\OneDrive\Comptabilite Nowis\sauvegardes
+- Google Drive pour ordinateur : inscrivez le chemin, par exemple
+      "copie_externe": "G:\\Mon disque\\Comptabilite Nowis"
+  (dans config.json, chaque \ s'ecrit \\).
+- "copie_externe": "non" : aucune copie.
+Le haut de la page et la fenetre noire indiquent ou va la copie et si elle a reussi.
+Pour reprendre une copie : "Restaurer une sauvegarde" et choisissez un fichier
+compta-AAAA-MM-JJ.json du dossier de copie (les photos sont dans son sous-dossier fichiers).
+Vos donnees financieres seront dans votre OneDrive : gardez votre compte protege par la
+double authentification.
 
 Pour reprendre des donnees de la version hors ligne (fichier HTML) : dans la version
 hors ligne, cliquez "Telecharger une sauvegarde", puis ici "Restaurer une sauvegarde".
