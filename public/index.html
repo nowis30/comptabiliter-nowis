@@ -68,6 +68,10 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog form{display:flex;flex-direction:column;gap:14px;padding:18px}
 .note{border-left:3px solid var(--warn);background:var(--warn-soft);padding:10px 12px;color:var(--ink)}
 .info{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 12px}
+.depot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:150px;padding:20px;border:2px dashed var(--line);border-radius:10px;background:var(--surface);text-align:center;cursor:pointer}
+.depot:hover,.depot.survol{border-color:var(--accent);background:var(--accent-soft)}
+.depot b{font-size:16px}
+.depot input{position:absolute;width:1px;height:1px;opacity:0}
 .formline{display:grid;grid-template-columns:54px 1fr auto;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
 .formline:last-child{border-bottom:0}
 .formline .no{font-family:var(--mono);font-size:13px;border:1px solid var(--ink);text-align:center;padding:1px 0}
@@ -509,7 +513,14 @@ function parseMontant(s){s=String(s??"").trim();if(!s)return null;const neg=/^\(
   const li=Math.max(s.lastIndexOf(","),s.lastIndexOf("."));let en,de="";if(li>=0&&s.length-li-1<=2){en=s.slice(0,li).replace(/[.,]/g,"");de=s.slice(li+1)}else en=s.replace(/[.,]/g,"");
   const c=parseInt(en||"0",10)*100+parseInt((de+"00").slice(0,2),10);return neg?-c:c}
 const estArgent=s=>/\d[.,]\d{2}\)?-?$/.test(String(s).trim());
+/* Desjardins (AccèsD) : sans en-tête; …, folio, type de compte (EOP, ES…), date AAAA/MM/JJ, no de transaction, description, no de chèque, retrait, dépôt, …, solde. */
+function desjardins(R){for(const r of R.slice(0,10))for(let i=1;i+5<r.length;i++)if(/^\d{4}\/\d{2}\/\d{2}$/.test(r[i])&&/^[A-Z]{2,4}\d{0,2}$/.test(r[i-1])){
+    const D=R.filter(x=>parseDate(x[i])),ok=D.filter(x=>/[a-z]/i.test(x[i+2]||"")&&(parseMontant(x[i+4])||parseMontant(x[i+5]))).length;
+    if(ok/D.length>=.8)return{date:i,desc:i+2,retrait:i+4,depot:i+5,montant:"",compte:i-1}}return null}
+const compteDe=r=>imp.map.compte===undefined?"":r.slice(Math.max(0,imp.map.compte-1),imp.map.compte+1).join(" ");
 function devinerColonnes(){const R=imp.rows,n=Math.max(...R.map(r=>r.length)),cols=[...Array(n).keys()];
+  const dj=desjardins(R);if(dj){imp.head=false;imp.map=dj;imp.banque="Desjardins";const C=[...new Set(R.filter(r=>parseDate(r[dj.date])).map(compteDe))];imp.comptes=C;imp.compte=C.length>1?C[0]:"";return}
+  imp.banque="";imp.comptes=[];imp.compte="";
   imp.head=!R[0].some(x=>parseDate(x))&&R.length>1&&R[1].some(x=>parseDate(x));
   const D=imp.head?R.slice(1):R,fr=(c,f)=>D.filter(r=>f(r[c]||"")).length/D.length,map={date:"",desc:"",retrait:"",depot:"",montant:""};
   if(imp.head){const h=R[0].map(x=>x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""));const f=re=>{const i=h.findIndex(x=>re.test(x));return i<0?"":i};
@@ -529,7 +540,7 @@ function hash(s){let h=5381,g=52711;for(let i=0;i<s.length;i++){const c=s.charCo
 function doublon(t){const a=t.out||t.in,j=d=>Math.abs((new Date(d)-new Date(t.date))/864e5)<=7;
   return items.find(e=>compte(e)&&(t.out?e.type==="depense":e.type!=="depense")&&((e.total===a&&j(e.date))||(e.paiements||[]).some(p=>p.montant===a&&p.date&&j(p.date))))}
 function construireTx(){const m=imp.map,D=imp.head?imp.rows.slice(1):imp.rows,vu={},old=Object.fromEntries(imp.tx.map(t=>[t.id,t]));
-  imp.tx=D.map(r=>{const date=parseDate(r[m.date]);if(!date)return null;let out=0,inn=0;
+  imp.tx=D.map(r=>{const date=parseDate(r[m.date]);if(!date||(imp.compte&&compteDe(r)!==imp.compte))return null;let out=0,inn=0;
     if(m.montant!==""){let x=parseMontant(r[m.montant]);if(x==null)return null;if(imp.inv)x=-x;if(x<0)out=-x;else inn=x}
     else{const a=m.retrait!==""?parseMontant(r[m.retrait]):null,b=m.depot!==""?parseMontant(r[m.depot]):null;out=Math.abs(a||0);inn=Math.abs(b||0);if(out&&inn){if(out>=inn){out-=inn;inn=0}else{inn-=out;out=0}}}
     if(!out&&!inn)return null;const desc=(r[m.desc]||"").replace(/\s+/g," ").trim(),k=`${date}|${desc}|${out}|${inn}`;vu[k]=(vu[k]||0)+1;
@@ -558,8 +569,9 @@ async function importerTx(){if(!db){toast("Enregistrement indisponible ici.");re
   imp.busy=false;toast(`${n} écriture${n>1?"s":""} ajoutée${n>1?"s":""}`);render()}
 function vImport(){
   if(!imp.rows)return `<section><h2>Import de relevé bancaire</h2>
-  <p class="muted small">Téléchargez un relevé au format CSV depuis le site de votre banque ou de votre carte de crédit, puis choisissez-le ici. Le fichier est lu dans votre navigateur : seules les transactions que vous cochez deviennent des écritures.</p>
-  <label>Fichier CSV du relevé<input type="file" id="bfile" accept=".csv,.txt,text/csv,text/plain"></label>
+  <p class="muted small">Le fichier est lu sur cet ordinateur : seules les transactions que vous cochez deviennent des écritures. Le logiciel ne se connecte jamais à votre banque.</p>
+  <label class="depot" id="bzone"><input type="file" id="bfile" accept=".csv,.txt,text/csv,text/plain"><b>Déposez votre relevé ici</b><span class="muted">Glissez le fichier CSV dans ce cadre, ou cliquez pour le choisir.</span></label>
+  <div class="info small"><b>Relevé Desjardins (AccèsD Affaires ou AccèsD)</b> : ouvrez le compte, choisissez « Relevé de compte » ou « Historique des transactions », sélectionnez la période, puis « Exporter » ou « Télécharger » au format CSV. Le fichier arrive dans votre dossier Téléchargements : glissez-le dans le cadre ci-dessus. Les colonnes Desjardins sont reconnues automatiquement.</div>
   <label>Ou collez ici le contenu du relevé<textarea id="bcolle" rows="5" placeholder="2026-11-03;ACHAT AMAZON.CA;45,98;"></textarea></label>
   <div class="row"><button id="blire" class="primary">Lire le texte collé</button></div></section>`;
   const R=imp.rows,n=Math.max(...R.map(r=>r.length)),ex=imp.head?R[1]||[]:R[0],m=imp.map;
@@ -567,6 +579,8 @@ function vImport(){
   const cats=imp.act==="immeuble"?CATS.immeuble:CATS.depense,nouv=imp.tx.filter(t=>t.sel).length,deja=imp.tx.filter(t=>etatTx(t)[1]).length;
   return `<section><h2>Import de relevé bancaire</h2>
   <div class="row between"><p class="small muted">${esc(imp.nom)} · ${imp.tx.length} transaction${imp.tx.length>1?"s":""} lue${imp.tx.length>1?"s":""} · ${nouv} cochée${nouv>1?"s":""} · ${deja} déjà dans vos écritures</p><button id="bautre">Choisir un autre relevé</button></div>
+  ${imp.banque?`<div class="info small">Relevé ${esc(imp.banque)} reconnu : les colonnes sont déjà choisies.</div>`:""}
+  ${imp.comptes&&imp.comptes.length>1?`<label style="max-width:360px">Ce fichier contient ${imp.comptes.length} comptes : lequel importer?<select id="bcompte">${imp.comptes.map(c=>`<option value="${esc(c)}" ${c===imp.compte?"selected":""}>${esc(c)}</option>`).join("")}</select></label>`:""}
   <h3>1. Colonnes du relevé</h3>
   <div class="grid"><label>Date${opt("date")}</label><label>Description${opt("desc")}</label><label>Retraits${opt("retrait")}</label><label>Dépôts${opt("depot")}</label><label>Montant unique (négatif = retrait)${opt("montant")}</label></div>
   <label class="check"><input type="checkbox" id="binv" ${imp.inv?"checked":""}> Relevé de carte de crédit : les montants positifs sont des achats</label>
@@ -1148,11 +1162,19 @@ $("#vue").addEventListener("click",ev=>{const t=ev.target;
   else if(b.id==="csv")exporter(csvEcritures(),`ecritures-nowis-${annee}.csv`);
   else if(b.id==="csvr")exporter(csvRapport(),`rapport-nowis-${annee}.csv`)});
 $("#vue").addEventListener("keydown",ev=>{if(ev.key==="Enter"){const tr=ev.target.closest("tr[data-id]");if(tr){const e=items.find(x=>x.id===tr.dataset.id);if(e)ouvrir(e)}}});
+/* Glisser-déposer un relevé n'importe où sur la page Import bancaire. */
+const zoneDepot=()=>vue()==="import";
+document.addEventListener("dragover",ev=>{if(!zoneDepot())return;ev.preventDefault();ev.dataTransfer.dropEffect="copy";const z=$("#bzone");if(z)z.classList.add("survol")});
+document.addEventListener("dragleave",ev=>{if(!ev.relatedTarget){const z=$("#bzone");if(z)z.classList.remove("survol")}});
+document.addEventListener("drop",ev=>{if(!zoneDepot())return;ev.preventDefault();const z=$("#bzone");if(z)z.classList.remove("survol");
+  const f=ev.dataTransfer&&ev.dataTransfer.files[0];if(!f)return;if(!/\.(csv|txt)$/i.test(f.name)&&!/text|csv/.test(f.type)){toast("Déposez un fichier CSV exporté de votre banque.");return}
+  lireFichier(f).catch(()=>toast("Lecture du fichier impossible."))});
 $("#vue").addEventListener("change",ev=>{const t=ev.target;
   if((t.id==="dphoto"||t.id==="dfile")&&t.files[0]){traiterFichier(t.files[0])}
   else if(t.id==="bfile"){if(t.files[0])lireFichier(t.files[0]).catch(()=>toast("Lecture du fichier impossible."))}
   else if(t.dataset.map){const k=t.dataset.map;imp.map[k]=t.value===""?"":+t.value;if(k==="montant"&&t.value!==""){imp.map.retrait="";imp.map.depot=""}if((k==="retrait"||k==="depot")&&t.value!=="")imp.map.montant="";construireTx();render()}
   else if(t.id==="binv"){imp.inv=t.checked;construireTx();render()}
+  else if(t.id==="bcompte"){imp.compte=t.value;imp.tx=[];construireTx();render()}
   else if(t.id==="bact"){imp.act=t.value;imp.tx.forEach(x=>x.man=false);construireTx();render()}
   else if(t.id==="bimm"){imp.imm=t.value}
   else if(t.id==="bflag"){imp.flag=t.checked}
