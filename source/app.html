@@ -124,7 +124,7 @@ const STATUTS={payee:["Payée","ok"],impayee:["À recevoir / à payer","warn"],p
 const MODES=["Virement Interac","Débit","Crédit","Comptant","PayPal","Chèque","Autre"];
 const CATS={
   revenu:["Gestion immobilière","Commission de location","Chanson personnalisée","Atelier","Marchandise (clés USB)","Autre revenu"],
-  depense:["Marchandises achetées","Matériel et fournitures","Logiciels et abonnements","Publicité","Frais de bureau","Télécommunications","Déplacements","Honoraires professionnels","Frais bancaires","Autre dépense"],
+  depense:["Marchandises achetées","Matériel et fournitures","Logiciels et abonnements","Publicité","Frais de bureau","Télécommunications","Déplacements","Honoraires professionnels","Frais bancaires","Bien durable (immobilisation)","Autre dépense"],
   immeuble:["Taxes municipales","Taxes scolaires","Assurances","Intérêts hypothécaires","Entretien et réparations","Services publics","Frais de gestion","Autre dépense d'immeuble"]};
 /* ---------- Verrouillage des périodes ---------- */
 const verrouDe=()=>regl.verrou||"";
@@ -144,6 +144,8 @@ const DEF={nom:"Création Nowis",proprietaire:"Simon Morin",adresse:"",telephone
 let db=null,dl=null,items=[],regl={...DEF},ready=false,annee=String(new Date().getFullYear()),filtre={ventes:"actives",q:""},taxe={du:"",au:""};
 
 const compte=e=>e.statut!=="annulee"&&e.statut!=="ecartee";
+/* Achat d'un bien durable : ses taxes donnent droit aux CTI/RTI, mais son coût passe à l'actif (compte 1500) et se déduit par l'amortissement, pas comme dépense. */
+const CAT_IMMO="Bien durable (immobilisation)",estImmo=e=>e.type==="depense"&&e.categorie===CAT_IMMO,estCharge=e=>e.type==="depense"&&e.categorie!==CAT_IMMO;
 const paye=e=>(e.paiements||[]).reduce((s,p)=>s+(p.montant||0),0);
 const deLAnnee=e=>(e.date||"").startsWith(annee);
 const estRevenu=e=>e.type==="facture"||e.type==="vente"||e.type==="loyer";
@@ -179,7 +181,7 @@ function chercher(list){const q=filtre.q.trim().toLowerCase();return q?list.filt
 /* ---------- Vues ---------- */
 function totaux(){
   const a=items.filter(e=>deLAnnee(e)&&compte(e)),n=a.filter(e=>e.activite==="nowis");
-  const rev=n.filter(estRevenu),dep=n.filter(e=>e.type==="depense");
+  const rev=n.filter(estRevenu),dep=[...n.filter(estCharge),...amortL(annee+"-01-01",annee+"-12-31")];
   return{rev:sum(rev,e=>e.sousTotal),dep:sum(dep,e=>e.sousTotal),aRecevoir:sum(rev,e=>Math.max(0,e.total-paye(e))),revL:rev,depL:dep,tous:a}}
 function vApercu(){const t=totaux(),x=calcTaxes(annee+"-01-01",annee+"-12-31"),nv=items.filter(e=>e.aVerifier).length;
   const loy=t.tous.filter(e=>e.type==="loyer"),di=t.tous.filter(e=>e.activite==="immeuble"&&e.type==="depense");
@@ -242,7 +244,9 @@ let rsel="resultats",rper={du:"",au:""};
 const solde=e=>e.statut==="payee"?0:Math.max(0,e.total-paye(e));
 const jours=(a,b)=>Math.floor((new Date(b+"T12:00:00")-new Date(a+"T12:00:00"))/864e5);
 const dateFr=d=>d?new Date(d+"T12:00:00").toLocaleDateString("fr-CA",{day:"numeric",month:"long",year:"numeric"}):"";
-function totauxP(du,au){const n=items.filter(e=>compte(e)&&e.activite==="nowis"&&e.date>=du&&e.date<=au),rev=n.filter(estRevenu),dep=n.filter(e=>e.type==="depense");return{rev:sum(rev,e=>e.sousTotal),dep:sum(dep,cout),revL:rev,depL:dep}}
+/* Amortissement (DPA) des biens durables, passé au 31 décembre : une ligne de dépense pour les rapports. */
+function amortL(du,au){const L=[];for(let y=+du.slice(0,4);y<=+au.slice(0,4);y++){const d=y+"-12-31",x=amortAnnee(y);if(x&&d>=du&&d<=au)L.push({type:"amort",categorie:"Amortissement (DPA)",date:d,sousTotal:x,tps:0,tvq:0})}return L}
+function totauxP(du,au){const n=items.filter(e=>compte(e)&&e.activite==="nowis"&&e.date>=du&&e.date<=au),rev=n.filter(estRevenu),dep=[...n.filter(estCharge),...amortL(du,au)];return{rev:sum(rev,e=>e.sousTotal),dep:sum(dep,cout),revL:rev,depL:dep}}
 function ageComptes(list){const T=today(),m={};list.filter(e=>compte(e)&&solde(e)>0).forEach(e=>{const r=jours(e.echeance||e.date,T),k=e.tiers||"Sans nom",b=r<=0?0:r<=30?1:r<=60?2:r<=90?3:4;(m[k]=m[k]||[0,0,0,0,0])[b]+=solde(e)});return Object.entries(m).sort((a,b)=>sum(b[1],x=>x)-sum(a[1],x=>x))}
 function tableAge(titre,rows,vide){const tot=[0,1,2,3,4].map(i=>sum(rows,r=>r[1][i]));
   return `<h3>${titre}</h3>${rows.length?`<div class="tablebox"><table><thead><tr><th>Nom</th><th class="num">Pas encore dû</th><th class="num">1 à 30 jours</th><th class="num">31 à 60 jours</th><th class="num">61 à 90 jours</th><th class="num">Plus de 90 jours</th><th class="num">Total</th></tr></thead><tbody>${rows.map(([k,b])=>`<tr><td>${esc(k)}</td>${b.map(x=>`<td class="num">${x?fmt(x):""}</td>`).join("")}<td class="num">${fmt(sum(b,x=>x))}</td></tr>`).join("")}<tr class="total"><td>Total</td>${tot.map(x=>`<td class="num">${fmt(x)}</td>`).join("")}<td class="num">${fmt(sum(tot,x=>x))}</td></tr></tbody></table></div>`:`<p class="muted">${vide}</p>`}`}
@@ -390,7 +394,7 @@ const slug=s=>s.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g,"-").replac
 function immeublesAnnee(){return[...new Set(items.filter(e=>deLAnnee(e)&&compte(e)&&e.activite==="immeuble").map(e=>e.immeuble||"Sans immeuble"))].sort()}
 function ctxForm(type){
   if(type==="fpz")return calcTaxes(taxe.du,taxe.au);
-  if(type==="ent"){const l=items.filter(e=>deLAnnee(e)&&compte(e)&&e.activite==="nowis"),d={};l.filter(e=>e.type==="depense").forEach(e=>{const k=CLE[e.categorie]||"autres";d[k]=(d[k]||0)+cout(e)});d.vehicule=(d.vehicule||0)+calcVeh().ded;d.dpa=(d.dpa||0)+amortAnnee(+annee);const bu=calcBur();return{rev:sum(l.filter(estRevenu),e=>e.sousTotal),d,domFed:bu.fed,domQc:bu.qc}}
+  if(type==="ent"){const l=items.filter(e=>deLAnnee(e)&&compte(e)&&e.activite==="nowis"),d={};l.filter(estCharge).forEach(e=>{const k=CLE[e.categorie]||"autres";d[k]=(d[k]||0)+cout(e)});d.vehicule=(d.vehicule||0)+calcVeh().ded;d.dpa=(d.dpa||0)+amortAnnee(+annee);const bu=calcBur();return{rev:sum(l.filter(estRevenu),e=>e.sousTotal),d,domFed:bu.fed,domQc:bu.qc}}
   const l=items.filter(e=>deLAnnee(e)&&compte(e)&&e.activite==="immeuble"&&(e.immeuble||"Sans immeuble")===fsel.imm),d={};l.filter(e=>e.type==="depense").forEach(e=>{const k=CLI[e.categorie]||"autres";d[k]=(d[k]||0)+e.total});return{loy:sum(l.filter(e=>e.type==="loyer"),e=>e.total),d,part:l[0]?.part??100}}
 function calcForm(rows,c,ov){const v={},a={};for(const r of rows){if(r.h)continue;if(r.calc)v[r.k]=r.calc(v);else{a[r.k]=r.auto?r.auto(c):0;v[r.k]=(r.k in ov)?ov[r.k]:a[r.k]}}return{v,a}}
 function defForm(){const [,,type]=FORMS[fsel.form];
@@ -616,7 +620,7 @@ function amortParAn(a){const y0=+String(a.dateAcq||"").slice(0,4),out={},c=a.cou
   for(let y=y0;y<=fin&&reste>0;y++){let x=a.methode==="lineaire"?Math.round(c/Math.max(1,+a.duree||1)):Math.round(reste*(+a.taux||0)/100);if(y===y0&&a.demi)x=Math.round(x/2);x=Math.min(x,reste);if(x<=0)break;out[y]=x;reste-=x}return out}
 const amortAnnee=y=>sum(immos,a=>amortParAn(a)[y]||0);
 const CR={"Gestion immobilière":4010,"Commission de location":4020,"Chanson personnalisée":4030,"Atelier":4040,"Marchandise (clés USB)":4050};
-const CD={"Marchandises achetées":5000,"Matériel et fournitures":5100,"Logiciels et abonnements":5110,"Publicité":5120,"Frais de bureau":5130,"Télécommunications":5140,"Déplacements":5150,"Honoraires professionnels":5160,"Frais bancaires":5170};
+const CD={"Marchandises achetées":5000,"Matériel et fournitures":5100,"Logiciels et abonnements":5110,"Publicité":5120,"Frais de bureau":5130,"Télécommunications":5140,"Déplacements":5150,"Honoraires professionnels":5160,"Frais bancaires":5170,[CAT_IMMO]:1500};
 let journalM=[],gl={vue:"bilan",date:"",compte:1000},curJ=null;
 function journal(){const J=[];
   for(const e of items){if(e.activite!=="nowis"||!compte(e)||!e.date)continue;const vente=estRevenu(e),nom=`${TYPES[e.type]}${e.numero?" "+e.numero:""}${e.tiers?" · "+e.tiers:""}`;let L;
@@ -672,7 +676,7 @@ function vGrandLivre(){const fin=annee+"-12-31";if(!gl.date||gl.date.slice(0,4)!
     ${a.methode==="lineaire"?`<label>Nombre d'années<input id="a-duree" type="number" min="1" max="50" value="${+a.duree||5}"></label>`:`<label>Taux par année (%)<input id="a-taux" type="number" min="1" max="100" step="0.1" value="${+a.taux||0}"></label>`}
     <label>Compte d'actif<select id="a-compte">${plan().filter(x=>x[2]==="A"&&![1000,1100,1200,1510].includes(x[0])).map(([n,t])=>`<option value="${n}" ${+a.compteActif===n?"selected":""}>${n} · ${esc(t)}</option>`).join("")}</select></label></div>
     <label class="check"><input type="checkbox" id="a-demi" ${a.demi?"checked":""}> Appliquer la règle de la demi-année (moitié de l'amortissement la première année)</label>
-    <label class="check"><input type="checkbox" id="a-achat" ${a.achat?"checked":""}> Inscrire aussi l'achat au journal, payé par l'encaisse. Décochez si l'achat est déjà inscrit autrement; ne le saisissez pas en plus comme dépense.</label>
+    <label class="check"><input type="checkbox" id="a-achat" ${a.achat?"checked":""}> Inscrire aussi l'achat au journal, payé par l'encaisse. Décochez si l'achat est déjà saisi comme dépense avec la catégorie « Bien durable (immobilisation) » : ses taxes y sont récupérées et son coût va déjà à l'actif.</label>
     <div class="row between"><div class="row">${a.id?`<button class="danger" id="asuppr">Supprimer</button>`:""}</div><div class="row">${a.id?`<button id="aannul">Annuler</button>`:""}<button class="primary" id="asave">Enregistrer le bien</button></div></div></div>
     ${R.length?`<div class="tablebox"><table><thead><tr><th>Bien</th><th>Acheté le</th><th>Méthode</th><th class="num">Coût</th><th class="num">Amortissement ${y}</th><th class="num">Cumulé fin ${y}</th><th class="num">Valeur nette</th></tr></thead><tbody>${R.map(([x,am,cum,vn])=>`<tr class="click" data-aid="${esc(x.id)}" tabindex="0"><td>${esc(x.nom)}</td><td style="white-space:nowrap">${esc(x.dateAcq)}</td><td>${x.methode==="lineaire"?`Linéaire, ${+x.duree} ans`:`Dégressif, ${String(x.taux).replace(".",",")} %`}${x.demi?" · demi-année":""}</td><td class="num">${fmt(x.cout)}</td><td class="num">${fmt(am)}</td><td class="num">${fmt(cum)}</td><td class="num">${fmt(vn)}</td></tr>`).join("")}<tr class="total"><td colspan="3">Total</td><td class="num">${fmt(sum(R,r=>r[0].cout||0))}</td><td class="num">${fmt(sum(R,r=>r[1]))}</td><td class="num">${fmt(sum(R,r=>r[2]))}</td><td class="num">${fmt(sum(R,r=>r[3]))}</td></tr></tbody></table></div>`:`<p class="muted">Aucun bien inscrit.</p>`}
     <p class="muted small">Les taux proposés sont les taux habituels des catégories de déduction pour amortissement. Les règles fiscales comportent des exceptions (amortissement accéléré, plafond des véhicules, biens de moins de 500 $) que le logiciel n'applique pas : faites confirmer la catégorie et le montant par votre comptable.</p></section>`}
