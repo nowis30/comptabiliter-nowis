@@ -29,7 +29,7 @@ h2{font-family:var(--cond);font-size:19px;margin:0;text-wrap:balance}
 h3{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:0;font-weight:600}
 p{margin:0;max-width:68ch}
 .muted{color:var(--muted)} .small{font-size:13px}
-nav{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line)}
+nav{display:flex;flex-wrap:wrap;gap:2px;border-bottom:1px solid var(--line)}
 nav a{padding:9px 12px;text-decoration:none;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;font-weight:500}
 nav a.on{color:var(--ink);border-bottom-color:var(--accent)}
 nav a .n{background:var(--warn-soft);color:var(--warn);border-radius:9px;padding:0 6px;font-size:12px;margin-left:4px}
@@ -225,7 +225,7 @@ const part=e=>e.activite==="immeuble"?(e.part??100)/100:1;
 function toast(t){const el=$("#toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2600)}
 
 /* ---------- Navigation ---------- */
-const VUES=[["apercu","Aperçu"],["agent","Assistant"],["ventes","Ventes et factures"],["depenses","Dépenses"],["immeubles","Immeubles"],["contacts","Contacts"],["documents","Photos et courriels"],["import","Import bancaire"],["rapprochement","Rapprochement"],["taxes","TPS / TVQ"],["recurrentes","Récurrentes et rappels"],["deplacements","Kilométrage et bureau"],["rapport","Rapports"],["grandlivre","Partie double et bilan"],["comptable","Mode comptable"],["verifier","À vérifier"],["historique","Historique"],["reglages","Réglages"]];
+const VUES=[["apercu","Aperçu"],["agent","Assistant"],["ventes","Ventes et factures"],["depenses","Dépenses"],["immeubles","Immeubles"],["contacts","Contacts"],["documents","Photos et courriels"],["import","Import bancaire"],["rapprochement","Rapprochement"],["taxes","TPS / TVQ"],["recurrentes","Récurrentes et rappels"],["deplacements","Kilométrage et bureau"],["rapport","Rapports"],["grandlivre","Journal et bilan"],["comptable","Mode comptable"],["verifier","À vérifier"],["historique","Historique"],["reglages","Réglages"]];
 function vue(){const h=location.hash.slice(1);return VUES.some(v=>v[0]===h)?h:"apercu"}
 function nav(){const v=vue(),n=items.filter(e=>e.aVerifier).length+(regl.dateInscription?0:1);
   $("#nav").innerHTML=VUES.map(([k,t])=>`<a href="#${k}" class="${k===v?"on":""}">${t}${k==="verifier"&&n&&ready?`<span class="n">${n}</span>`:""}</a>`).join("")}
@@ -264,7 +264,8 @@ function vApercu(){const t=totaux(),x=calcTaxes(annee+"-01-01",annee+"-12-31"),n
    <div class="tile"><span class="small muted">Revenus avant taxes</span><b>${fmt(t.rev)}</b></div>
    <div class="tile"><span class="small muted">Dépenses avant taxes</span><b>${fmt(t.dep)}</b></div>
    <div class="tile"><span class="small muted">Bénéfice net</span><b>${fmt(t.rev-t.dep)}</b></div>
-   <div class="tile"><span class="small muted">TPS + TVQ à remettre</span><b>${fmt(x.netTPS+x.netTVQ)}</b></div>
+   <div class="tile"><span class="small muted">TPS ${x.netTPS<0?"à recevoir":"à remettre"}</span><b>${fmt(Math.abs(x.netTPS))}</b></div>
+   <div class="tile"><span class="small muted">TVQ ${x.netTVQ<0?"à recevoir":"à remettre"}</span><b>${fmt(Math.abs(x.netTVQ))}</b></div>
    <div class="tile"><span class="small muted">Factures à recevoir</span><b>${fmt(t.aRecevoir)}</b></div>
   </div>
   <h3>Immeubles · ${annee} · votre part</h3>
